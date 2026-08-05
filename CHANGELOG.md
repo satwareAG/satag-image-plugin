@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Infrastructure
+- CI auto-mirror workflow (`.gitea/workflows/mirror-to-github.yml`): three gates
+  (privacy scan, tests, version consistency) before GitHub push. Triggers on
+  every push to `main`. Adapted from satag-time-plugin (proven, CI-green).
+
 ## [1.1.0] - 2026-08-05
 
 ### Added
