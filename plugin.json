@@ -15,7 +15,7 @@
   "authenticationType": "AUTH_TYPE_NONE",
   "openaiSpec": {
     "name": "generate_image",
-    "description": "satware® AI image - generate new images from text (optionally with reference images for character consistency) or edit/composite existing/previous images.",
+    "description": "Generate new image(s) from a text prompt using Google Gemini. Supports 1-4 images per call (n), style presets, quality presets, and professional prompt enhancement. v1.1.0: accepts optional uploaded reference images for character/object consistency across new scene generations. Returns image cards rendered in chat.",
     "parameters": {
       "type": "object",
       "required": [
@@ -25,6 +25,44 @@
         "prompt": {
           "type": "string",
           "description": "Image description. Be specific and descriptive - the prompt drives the generated image."
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "default": 1,
+          "description": "Number of images to generate (1-4)"
+        },
+        "style": {
+          "type": "string",
+          "enum": [
+            "realistic",
+            "artistic",
+            "cartoon",
+            "abstract",
+            "photographic",
+            "cinematic",
+            "anime"
+          ],
+          "description": "Visual style preference"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Creativity override (0=consistent, 1=creative)"
+        },
+        "topP": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1,
+          "description": "Nucleus sampling override (0.1-1.0)"
+        },
+        "topK": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Token selection override (1-100)"
         }
       },
       "additionalProperties": false
