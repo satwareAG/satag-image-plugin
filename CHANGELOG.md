@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (privacy scan, tests, version consistency) before GitHub push. Triggers on
   every push to `main`. Adapted from satag-time-plugin (proven, CI-green).
 
+## [1.1.1] - 2026-08-07
+
+### Added
+- Error messages now include active config context `[Enhancement: X, Quality: Y]`
+  for API errors (safety blocks, no candidates, invalid format, API failures,
+  prompt blocks), aiding debugging when users report failures. Auth errors
+  (401/403) and validation errors left clean. Applies to both `generate_image`
+  and `edit_image` (implementation.js + both embedded pluginFunctions[] entries).
+- `overviewMarkdown`: Performance & Pricing section (cost per image, resolution,
+  SynthID watermarking, pricing link).
+- `overviewMarkdown`: Setup instructions (4-step quickstart).
+- `overviewMarkdown`: Usage Examples (generate, edit, corporate workflow).
+- 4 new tests: config context present/absent on safety-block errors for both
+  `generate_image` and `edit_image`.
+
+### Changed
+- Version bumped 1.1.0 -> 1.1.1 (plugin.json + package.json + CHANGELOG.md).
+
 ## [1.1.0] - 2026-08-05
 
 ### Added

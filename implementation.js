@@ -81,6 +81,11 @@ async function generate_image(params, userSettings, authorizedResources) {
   const industryFocus = userSettings.industryFocus || '';
   const brandCompliance = userSettings.brandCompliance || '';
   const model = userSettings.model || 'gemini-3-pro-image';
+  // v1.1.1: Config context appended to API-error messages for debugging.
+  // Only API errors (not validation errors) get this context.
+  const configContext = promptEnhancementMode !== 'none'
+    ? ' [Enhancement: ' + promptEnhancementMode + ', Quality: ' + qualityPreset + ']'
+    : '';
 
   const enhancedPrompt = buildEnhancedPrompt(prompt, promptEnhancementMode, customPromptEnhancement, industryFocus, brandCompliance, style);
   const qualityConfig = getQualityConfig(qualityPreset, params.temperature, params.topP, params.topK, userSettings);
@@ -153,27 +158,27 @@ async function generate_image(params, userSettings, authorizedResources) {
       } catch (e) {
         errorMessage += ': ' + errorText.substring(0, 200);
       }
-      return { isError: true, error: errorMessage };
+      return { isError: true, error: errorMessage + configContext };
     }
     const data = await response.json();
     if (data.promptFeedback && data.promptFeedback.blockReason) {
-      return { isError: true, error: 'Prompt blocked: ' + data.promptFeedback.blockReason };
+      return { isError: true, error: 'Prompt blocked: ' + data.promptFeedback.blockReason + configContext };
     }
     if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-      return { isError: true, error: 'No image generated for request ' + (i + 1) };
+      return { isError: true, error: 'No image generated for request ' + (i + 1) + configContext };
     }
     const candidate = data.candidates[0];
     if (candidate.finishReason === 'SAFETY') {
       const safetyRatings = candidate.safetyRatings || [];
       const blockedCategories = safetyRatings.filter(function (r) { return r.blocked; }).map(function (r) { return r.category; }).join(', ');
-      return { isError: true, error: 'Content blocked by safety filters: ' + blockedCategories };
+      return { isError: true, error: 'Content blocked by safety filters: ' + blockedCategories + configContext };
     }
     if (!candidate.content || !candidate.content.parts) {
-      return { isError: true, error: 'Invalid response format for image ' + (i + 1) };
+      return { isError: true, error: 'Invalid response format for image ' + (i + 1) + configContext };
     }
     const imagePart = candidate.content.parts.find(function (part) { return part.inlineData && part.inlineData.data; });
     if (!imagePart) {
-      return { isError: true, error: 'Image ' + (i + 1) + ' does not contain valid data.' };
+      return { isError: true, error: 'Image ' + (i + 1) + ' does not contain valid data.' + configContext };
     }
     const mimeType = imagePart.inlineData.mimeType || 'image/png';
     const enhancementInfo = promptEnhancementMode !== 'none'
