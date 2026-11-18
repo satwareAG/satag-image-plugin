@@ -154,8 +154,8 @@ Spec: `specs/001-reliability-batch/` (#8, #9, #16, #20) + direct TDD (#21).
   function). Regression test locks this in.
 
 ### Security
-- Scrubbed a hardcoded default Gemini API key
-  (`AIzaSyBh3IdiFtE_0kgojboBlV0tJRgGw_IPEBk`) from the original export's
-  `userSettings.geminiApiKey.defaultValue`. The key is flagged for rotation
-  (operational, tracked in issue #6); reintroducing a default key fails the
+- Scrubbed a hardcoded default Gemini API key (redacted here; prefix
+  `AIzaSyBh3IdiFtE…`) from the original export's
+  `userSettings.geminiApiKey.defaultValue`. The key was rotated
+  (2026-11-18, per mw); reintroducing a default key fails the
   privacy scan and the test suite (Constitution Art. XII).
