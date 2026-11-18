@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (privacy scan, tests, version consistency) before GitHub push. Triggers on
   every push to `main`. Adapted from satag-time-plugin (proven, CI-green).
 
+## [1.2.0-dev.1] - 2026-11-18
+
+Dev build for staging validation (issue #4).
+Spec: `specs/001-reliability-batch/` (#8, #9, #16, #20) + direct TDD (#21).
+
+### Changed
+- **#8**: All error paths in both functions now `throw new Error(...)`
+  instead of returning `{isError: true, error: ...}`. The isError return
+  shape crashes TypingMind's `outputType: "cards"` renderer
+  ("Cannot read properties of undefined (reading 'map')"). Throw is the
+  documented pattern (build-a-typingmind-plugin: the app shows the message
+  to the user; the AI sees it and may retry with corrected parameters).
+- **#20 (FR-008)**: Edit instruction now states verbatim: "Only apply the
+  requested edit. Do NOT change the composition, pose, background, clothing,
+  or any other element." (was: ", maintaining original image quality and
+  consistency" - too weak, Gemini regenerated scenes).
+- Dynamic context + overview version strings updated to match.
+
+### Added
+- **#21 (worms#34)**: Non-image attachments (PDF etc.) are rejected with a
+  clear bilingual error naming the offending MIME types and the fix
+  (export a page as image / attach a screenshot). Previously a PDF
+  attachment failed silently: `edit_image` fell through to a misleading
+  "No image to edit", `generate_image` generated without the reference.
+  Policy: `edit_image` rejects any non-image attachment (they ARE the edit
+  input); `generate_image` rejects only when no usable image attachment
+  exists (extras are ignored when images are present).
+- 9 new tests: throw semantics (7), PDF rejection generate/edit + mixed
+  cases (4 minus 1 replaced), static no-error-object gate (1). 72 total.
+
+### Deferred (next dev build)
+- #16 retry with exponential backoff (FR-005..FR-007, FR-009 shared helper).
+
 ## [1.1.1] - 2026-08-07
 
 ### Added

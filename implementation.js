@@ -18,6 +18,12 @@
  * Both features use Gemini's multi-inlineData parts in a single
  * generateContent call (no multi-turn chat needed).
  *
+ * v1.2.0-dev.1: All error paths throw Error instead of returning an
+ * error-object (that shape crashes the cards outputType - issue #8).
+ * Non-image attachments (PDF etc.) are rejected with clear, actionable
+ * errors (issue #21 - previously silent fail). Edit instruction hardened
+ * to prevent scene reinterpretation (issue #20, spec FR-008).
+ *
  * Output: TypingMind cards ({cards:[{type:'image', image:{url,alt,sync:true}}]})
  * so generated/edited images render in the chat UI.
  *
@@ -66,11 +72,11 @@
 async function generate_image(params, userSettings, authorizedResources) {
   const prompt = (params && params.prompt != null) ? String(params.prompt).trim() : '';
   if (!prompt) {
-    return { isError: true, error: 'prompt is required for image generation.' };
+    throw new Error('prompt is required for image generation.');
   }
   const geminiApiKey = (userSettings && userSettings.geminiApiKey) ? String(userSettings.geminiApiKey).trim() : '';
   if (!geminiApiKey) {
-    return { isError: true, error: 'Gemini API key is required. Configure it in the plugin settings.' };
+    throw new Error('Gemini API key is required. Configure it in the plugin settings.');
   }
   const n = Math.min(Math.max(parseInt(params.n) || parseInt(userSettings.defaultImageCount) || 1, 1), 4);
   const style = params.style || userSettings.defaultStyle || '';
@@ -107,6 +113,15 @@ async function generate_image(params, userSettings, authorizedResources) {
   // so the model never receives a "Preserve the character..." instruction with no
   // reference image attached (which would cause hallucination or refusal).
   const referenceImageUrls = extractReferenceImages(authorizedResources);
+  // Issue #21 (worms#34): if the user attached only non-image files (e.g. a PDF),
+  // v1.1 silently generated WITHOUT them. Reject explicitly with an actionable
+  // error instead. If usable image attachments exist, non-image extras are ignored.
+  if (referenceImageUrls.length === 0) {
+    const unsupported = listUnsupportedAttachmentTypes(authorizedResources);
+    if (unsupported.length > 0) {
+      throw unsupportedAttachmentsError(unsupported);
+    }
+  }
   const referenceParts = [];
   for (const imageUrl of referenceImageUrls) {
     const inlinePart = await imageToInlineData(imageUrl);
@@ -139,10 +154,10 @@ async function generate_image(params, userSettings, authorizedResources) {
       body: JSON.stringify(requestBody)
     });
     if (response.status === 401) {
-      return { isError: true, error: 'Invalid Gemini API Key. Please check the key in plugin settings.' };
+      throw new Error('Invalid Gemini API Key. Please check the key in plugin settings.');
     }
     if (response.status === 403) {
-      return { isError: true, error: 'Access denied. Ensure your API key has image generation permissions.' };
+      throw new Error('Access denied. Ensure your API key has image generation permissions.');
     }
     if (!response.ok) {
       const errorText = await response.text();
@@ -158,27 +173,27 @@ async function generate_image(params, userSettings, authorizedResources) {
       } catch (e) {
         errorMessage += ': ' + errorText.substring(0, 200);
       }
-      return { isError: true, error: errorMessage + configContext };
+      throw new Error(errorMessage + configContext);
     }
     const data = await response.json();
     if (data.promptFeedback && data.promptFeedback.blockReason) {
-      return { isError: true, error: 'Prompt blocked: ' + data.promptFeedback.blockReason + configContext };
+      throw new Error('Prompt blocked: ' + data.promptFeedback.blockReason + configContext);
     }
     if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-      return { isError: true, error: 'No image generated for request ' + (i + 1) + configContext };
+      throw new Error('No image generated for request ' + (i + 1) + configContext);
     }
     const candidate = data.candidates[0];
     if (candidate.finishReason === 'SAFETY') {
       const safetyRatings = candidate.safetyRatings || [];
       const blockedCategories = safetyRatings.filter(function (r) { return r.blocked; }).map(function (r) { return r.category; }).join(', ');
-      return { isError: true, error: 'Content blocked by safety filters: ' + blockedCategories + configContext };
+      throw new Error('Content blocked by safety filters: ' + blockedCategories + configContext);
     }
     if (!candidate.content || !candidate.content.parts) {
-      return { isError: true, error: 'Invalid response format for image ' + (i + 1) + configContext };
+      throw new Error('Invalid response format for image ' + (i + 1) + configContext);
     }
     const imagePart = candidate.content.parts.find(function (part) { return part.inlineData && part.inlineData.data; });
     if (!imagePart) {
-      return { isError: true, error: 'Image ' + (i + 1) + ' does not contain valid data.' + configContext };
+      throw new Error('Image ' + (i + 1) + ' does not contain valid data.' + configContext);
     }
     const mimeType = imagePart.inlineData.mimeType || 'image/png';
     const enhancementInfo = promptEnhancementMode !== 'none'
@@ -331,6 +346,40 @@ function extractReferenceImages(authorizedResources) {
   } catch (e) {
     return [];
   }
+}
+
+/**
+ * listUnsupportedAttachmentTypes - Collect distinct non-image MIME types from
+ * userMessage attachments (issue #21).
+ *
+ * @param {Object} [authorizedResources] - TypingMind-provided resources
+ * @returns {string[]} Distinct non-image attachment types (empty = all usable)
+ */
+function listUnsupportedAttachmentTypes(authorizedResources) {
+  try {
+    const attachments = (authorizedResources && authorizedResources.userMessage && authorizedResources.userMessage.attachments) || [];
+    const types = attachments
+      .filter(function (item) { return item && item.type && !item.type.startsWith('image/'); })
+      .map(function (item) { return item.type; });
+    return types.filter(function (t, i) { return types.indexOf(t) === i; });
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * unsupportedAttachmentsError - Build the clear, actionable rejection message
+ * for non-image attachments (issue #21: silent fail -> explicit rejection).
+ *
+ * @param {string[]} types - Distinct unsupported MIME types
+ * @returns {Error} Error naming the types and how to proceed
+ */
+function unsupportedAttachmentsError(types) {
+  return new Error(
+    'Unsupported attachment type(s): ' + types.join(', ') + '. ' +
+    'Please use image files (PNG, JPEG, WebP). For PDFs: export a page as an image or attach a screenshot. ' +
+    '(PDF-Dateien werden als Bildeingabe nicht unterstuetzt - bitte eine Seite als Bild exportieren oder einen Screenshot verwenden.)'
+  );
 }
 
 /**
